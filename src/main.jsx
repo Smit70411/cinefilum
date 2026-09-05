@@ -2826,12 +2826,21 @@ function CreateProfile({ profile, updateProfile }) {
     setError("");
     setOptimizing(true);
     try {
-      const compressedDataUrl = await compressAvatarImage(file, 240, 240, 0.85);
-      setForm((f) => ({ ...f, avatar: compressedDataUrl }));
+      // Load as data URL first so the cropper can use it (no CORS issues)
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setForm((f) => ({ ...f, avatar: ev.target.result }));
+        setOptimizing(false);
+        setShowCropper(true); // open cropper immediately after upload
+      };
+      reader.onerror = () => {
+        setError("Could not read this image file. Please try another.");
+        setOptimizing(false);
+      };
+      reader.readAsDataURL(file);
     } catch (err) {
       console.error("Photo processing failed:", err);
       setError("Could not process this image file. Please try another image.");
-    } finally {
       setOptimizing(false);
     }
   };
