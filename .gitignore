@@ -6,6 +6,3 @@ dist/
 *.log
 .vercel
 push.bat
-
-.vercel
-.env*
