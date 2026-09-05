@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -2581,6 +2581,209 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
 }
 
 // ── Create Profile (Clean Public Form with Auto-Compression) ────────
+// ── Image Crop Modal ─────────────────────────────────────────────
+function ImageCropModal({ src, onCrop, onClose }) {
+  const canvasRef = useRef(null);
+  const imgRef = useRef(null);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState("");
+  // Crop box state (relative to displayed image)
+  const [crop, setCrop] = useState({ x: 0, y: 0, size: 200 });
+  const [dragging, setDragging] = useState(null); // null | 'move' | 'resize'
+  const [dragStart, setDragStart] = useState(null);
+  const containerRef = useRef(null);
+  const [imgDisplay, setImgDisplay] = useState({ w: 0, h: 0, offX: 0, offY: 0 });
+
+  // Proxy URL to bypass CORS for external images
+  const proxied = src.startsWith("data:") ? src : `https://images.weserv.nl/?url=${encodeURIComponent(src)}&default=1`;
+
+  const onLoad = useCallback(() => {
+    const img = imgRef.current;
+    const container = containerRef.current;
+    if (!img || !container) return;
+    const maxW = container.clientWidth - 32;
+    const maxH = 360;
+    const ratio = img.naturalWidth / img.naturalHeight;
+    let w = maxW, h = maxW / ratio;
+    if (h > maxH) { h = maxH; w = maxH * ratio; }
+    const offX = (container.clientWidth - w) / 2;
+    const initSize = Math.min(w, h, 240);
+    setImgDisplay({ w, h, offX, offY: 0 });
+    setCrop({ x: (w - initSize) / 2, y: (h - initSize) / 2, size: initSize });
+    setLoaded(true);
+  }, []);
+
+  // Draw preview on canvas
+  useEffect(() => {
+    if (!loaded) return;
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img) return;
+    const ctx = canvas.getContext("2d");
+    const { w, h, offX } = imgDisplay;
+    const scaleX = img.naturalWidth / w;
+    const scaleY = img.naturalHeight / h;
+    const sx = Math.max(0, crop.x * scaleX);
+    const sy = Math.max(0, crop.y * scaleY);
+    const sw = crop.size * scaleX;
+    const sh = crop.size * scaleY;
+    canvas.width = 240;
+    canvas.height = 240;
+    ctx.clearRect(0, 0, 240, 240);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 240, 240);
+  }, [crop, loaded, imgDisplay]);
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  const onMouseDown = (e, type) => {
+    e.preventDefault();
+    setDragging(type);
+    setDragStart({ mx: e.clientX, my: e.clientY, crop: { ...crop } });
+  };
+
+  const onMouseMove = useCallback((e) => {
+    if (!dragging || !dragStart) return;
+    const { w, h } = imgDisplay;
+    const dx = e.clientX - dragStart.mx;
+    const dy = e.clientY - dragStart.my;
+    if (dragging === "move") {
+      setCrop(c => ({
+        ...c,
+        x: clamp(dragStart.crop.x + dx, 0, w - c.size),
+        y: clamp(dragStart.crop.y + dy, 0, h - c.size)
+      }));
+    } else if (dragging === "resize") {
+      const newSize = clamp(dragStart.crop.size + Math.max(dx, dy), 40, Math.min(w - dragStart.crop.x, h - dragStart.crop.y));
+      setCrop(c => ({ ...c, size: newSize }));
+    }
+  }, [dragging, dragStart, imgDisplay]);
+
+  const onMouseUp = useCallback(() => setDragging(null), []);
+
+  const handleCrop = () => {
+    const dataUrl = canvasRef.current?.toDataURL("image/jpeg", 0.92);
+    if (dataUrl) onCrop(dataUrl);
+  };
+
+  return (
+    <div className="modalOverlay" onClick={onClose}>
+      <div
+        className="modal cropModal"
+        onClick={e => e.stopPropagation()}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
+      >
+        <div className="modalHeader">
+          <h3 style={{ margin: 0 }}>✂️ Crop Avatar Image</h3>
+          <button className="closeBtn" onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <div style={{ padding: "0 16px" }}>
+          <p style={{ color: "#94a3b8", fontSize: 13, marginBottom: 12 }}>
+            Drag the box to reposition · Drag the ◢ handle to resize
+          </p>
+        </div>
+
+        {error && <p style={{ color: "#f87171", padding: "0 16px 8px", fontSize: 13 }}>{error}</p>}
+
+        {/* Image + overlay crop area */}
+        <div ref={containerRef} style={{ position: "relative", minHeight: 80, padding: "0 16px 12px", userSelect: "none" }}>
+          {/* Hidden img for natural size */}
+          <img
+            ref={imgRef}
+            src={proxied}
+            alt="crop source"
+            crossOrigin="anonymous"
+            onLoad={onLoad}
+            onError={() => setError("Could not load image. Try a different URL or upload the image directly.")}
+            style={{ display: "none" }}
+          />
+
+          {!loaded && !error && (
+            <div style={{ textAlign: "center", padding: 32, color: "#64748b" }}>Loading image…</div>
+          )}
+
+          {loaded && (
+            <div style={{ position: "relative", display: "inline-block", left: imgDisplay.offX, width: imgDisplay.w, height: imgDisplay.h }}>
+              {/* Rendered image */}
+              <img
+                src={proxied}
+                alt="crop"
+                crossOrigin="anonymous"
+                style={{ width: imgDisplay.w, height: imgDisplay.h, display: "block", borderRadius: 8 }}
+                draggable={false}
+              />
+              {/* Dim overlay */}
+              <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)", borderRadius: 8, pointerEvents: "none" }} />
+              {/* Crop window (clears the dim) */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: crop.x, top: crop.y,
+                  width: crop.size, height: crop.size,
+                  border: "2px solid #f59e0b",
+                  boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
+                  borderRadius: 6,
+                  cursor: "move",
+                  background: "transparent"
+                }}
+                onMouseDown={e => onMouseDown(e, "move")}
+              >
+                {/* Resize handle */}
+                <div
+                  style={{
+                    position: "absolute", right: -10, bottom: -10,
+                    width: 22, height: 22,
+                    background: "#f59e0b",
+                    borderRadius: "50%",
+                    cursor: "se-resize",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 11, color: "#000", fontWeight: 700
+                  }}
+                  onMouseDown={e => { e.stopPropagation(); onMouseDown(e, "resize"); }}
+                >◢</div>
+                {/* Corner guides */}
+                {[["top","left"],["top","right"],["bottom","left"],["bottom","right"]].map(([v,h],i) => (
+                  <div key={i} style={{ position:"absolute", [v]:0, [h]:0, width:12, height:12,
+                    borderTop: v==="top" ? "2px solid #fff" : "none",
+                    borderBottom: v==="bottom" ? "2px solid #fff" : "none",
+                    borderLeft: h==="left" ? "2px solid #fff" : "none",
+                    borderRight: h==="right" ? "2px solid #fff" : "none"
+                  }} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Preview + Apply */}
+        {loaded && (
+          <div style={{ display: "flex", alignItems: "center", gap: 20, padding: "12px 16px 16px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+            <div>
+              <p style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>Preview</p>
+              <canvas
+                ref={canvasRef}
+                width={240} height={240}
+                style={{ width: 80, height: 80, borderRadius: "50%", border: "2px solid #f59e0b", display: "block" }}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontSize: 13, color: "#94a3b8", marginBottom: 12 }}>Looks good? Click Apply to use this cropped image as your avatar.</p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn primary" onClick={handleCrop} style={{ fontSize: 13 }}>
+                  <Check size={15} /> Apply Crop
+                </button>
+                <button className="btn" onClick={onClose} style={{ fontSize: 13 }}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function CreateProfile({ profile, updateProfile }) {
   const nav = useNavigate();
   const fileInputRef = React.useRef(null);
@@ -2595,6 +2798,7 @@ function CreateProfile({ profile, updateProfile }) {
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
   const [optimizing, setOptimizing] = useState(false);
+  const [showCropper, setShowCropper] = useState(false);
 
   // Sync form state whenever profile updates
   useEffect(() => {
@@ -2720,6 +2924,31 @@ function CreateProfile({ profile, updateProfile }) {
               style={{ marginTop: 6 }}
             />
           </label>
+
+          {/* Crop from URL button */}
+          {form.avatar && form.avatar.startsWith("http") && (
+            <div style={{ marginTop: 8 }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setShowCropper(true)}
+                style={{ fontSize: 13, padding: "8px 16px", borderColor: "#f59e0b", color: "#f59e0b" }}
+              >
+                ✂️ Crop Image from URL
+              </button>
+            </div>
+          )}
+
+          {showCropper && form.avatar && (
+            <ImageCropModal
+              src={form.avatar}
+              onCrop={(dataUrl) => {
+                setForm(f => ({ ...f, avatar: dataUrl }));
+                setShowCropper(false);
+              }}
+              onClose={() => setShowCropper(false)}
+            />
+          )}
 
           <div style={{ marginTop: 16 }}>
             <span style={{ fontSize: "13px", color: "#cbd5e1", fontWeight: 600 }}>Or Select an Interstellar Crew Avatar:</span>
