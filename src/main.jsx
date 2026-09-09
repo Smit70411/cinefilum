@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+﻿import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -1968,7 +1968,7 @@ function SoloWatch({ list, toggleList, onPlayTrailer, allMedia = initialMedia })
 // ── Watch Together (Interactive Real-Time Virtual Theater) ────────────────
 function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = initialMedia }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const roomParam = searchParams.get("room") || "CF-7G4X";
+  const roomParam = searchParams.get("room") || ("CF-" + Math.random().toString(36).substring(2,6).toUpperCase());
   const initialId = searchParams.get("id") || "m-1";
 
   const [roomId, setRoomId] = useState(roomParam);
@@ -1986,14 +1986,15 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
   const [syncNotice, setSyncNotice] = useState(false);
   const [reactions, setReactions] = useState([]);
   const [tabView, setTabView] = useState("chat"); // 'chat' or 'crew'
-
+  const [adShield, setAdShield] = useState(true);
+  const messagesEndRef = useRef(null);
   const [messages, setMessages] = useState([
     {
       id: "m-1",
       u: "Cooper",
       role: "Co-pilot",
       avatar: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=200&auto=format&fit=crop&q=80",
-      t: "Sub-space relay linked to room " + roomParam + ". Telemetry locked & ready to stream! 🛰️",
+      t: "Sub-space relay linked to room " + roomParam + ". Telemetry locked & ready to stream! \uD83D\uDE80",
       time: "11:00 AM"
     },
     {
@@ -2001,7 +2002,7 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
       u: "TARS",
       role: "AI Security",
       avatar: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=200&auto=format&fit=crop&q=80",
-      t: "VidSrc.sbs primary stream buffer 100% nominal. Latency: 14ms. 🤖",
+      t: "VidSrc.sbs primary stream buffer 100% nominal. Latency: 14ms. \uD83E\uDD16",
       time: "11:01 AM"
     }
   ]);
@@ -2082,7 +2083,7 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
       role: "Relay",
       avatar: "",
       t: `⚡ Host broadcasted playback sync pulse across room ${roomId}. (0.00s drift)`,
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      t: `\uD83D\uDCE1 Host broadcasted playback sync pulse across room ${roomId}. (0.00s drift)`,
       isSystem: true
     };
     setMessages((prev) => [...prev, syncMsg]);
@@ -2133,7 +2134,7 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
           role: "AI Security",
           avatar: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=200&auto=format&fit=crop&q=80",
           t: "🤖 Telemetry drift corrected: 0.00ms. All client relays locked in sync!",
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          t: "\uD83E\uDD16 Telemetry drift corrected: 0.00ms. All client relays locked in sync!",
         };
         setMessages((prev) => [...prev, tarsMsg]);
         broadcastEvent("CHAT_MSG", tarsMsg);
@@ -2422,7 +2423,7 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
 
               {/* Quick Floating Emoji Reaction Bar */}
               <div className="quickReactionStrip">
-                {["🍿", "🚀", "🔥", "😱", "❤️", "👏", "🎬", "🛸"].map((emo) => (
+                {["\uD83C\uDF7F", "\uD83D\uDD25", "\u2764\uFE0F", "\uD83D\uDE02", "\uD83E\uDD2F", "\uD83D\uDC4F", "\uD83D\uDE2E", "\uD83C\uDFAC"].map((emo) => (
                   <button
                     key={emo}
                     className="reactionBurstBtn"
