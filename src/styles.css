@@ -3326,3 +3326,685 @@ input {
   opacity: 0.7;
   cursor: wait;
 }
+/* ================================================================
+   RESPONSIVE SYSTEM — Cinefilum
+   Breakpoints:
+     1024px  — Small laptops / large tablets (landscape)
+      768px  — Tablets (portrait)
+      480px  — Large phones
+      375px  — Small phones (iPhone SE, etc.)
+   ================================================================ */
+
+/* ── 1024px: Small laptops & large tablets landscape ─────────── */
+@media (max-width: 1024px) {
+  .page {
+    padding-left: 4%;
+    padding-right: 4%;
+  }
+
+  .hero {
+    padding: 40px 4%;
+  }
+
+  .heroContent {
+    max-width: 65%;
+  }
+
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .watchLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .chat {
+    max-height: 420px;
+  }
+
+  .soloWatchPage {
+    padding: 20px 3% 60px;
+  }
+
+  .detailHero {
+    min-height: 580px;
+  }
+
+  .detailContent h1 {
+    font-size: clamp(28px, 5vw, 56px) !important;
+  }
+
+  .profileHead {
+    gap: 20px;
+  }
+
+  .bigAvatar {
+    width: 90px;
+    height: 90px;
+    font-size: 32px;
+  }
+
+  .avatarPresetGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── 768px: Tablets portrait ──────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Nav */
+  .nav {
+    padding: 0 4%;
+    height: 60px;
+  }
+
+  .navlinks {
+    top: 60px;
+    padding: 16px 20px;
+    gap: 6px;
+  }
+
+  .navlinks a {
+    padding: 10px 0;
+    font-size: 15px;
+  }
+
+  /* Pages */
+  .page {
+    padding: 24px 4% 80px;
+  }
+
+  .pageTitle,
+  .watchTop {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .pageTitle h1,
+  .page h1 {
+    font-size: clamp(22px, 5vw, 32px);
+  }
+
+  /* Hero */
+  .hero {
+    padding: 30px 4%;
+    min-height: calc(85vh - 60px);
+    align-items: flex-end;
+    padding-bottom: 40px;
+  }
+
+  .heroContent {
+    max-width: 100%;
+  }
+
+  .hero h1 {
+    font-size: clamp(26px, 6vw, 40px) !important;
+  }
+
+  .heroDescText {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 14px;
+  }
+
+  .hero .actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .heroPreviewStrip {
+    display: none;
+  }
+
+  .heroRankBadge {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+
+  /* Cards & Grid */
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .card {
+    border-radius: 10px;
+  }
+
+  .cardTitle {
+    font-size: 12px;
+  }
+
+  /* Row */
+  .rowWrapper {
+    margin-bottom: 28px;
+  }
+
+  .row {
+    gap: 10px;
+    padding-bottom: 8px;
+  }
+
+  .row .card {
+    min-width: 140px;
+    max-width: 140px;
+  }
+
+  .rowScrollBtn {
+    display: none;
+  }
+
+  /* Genre grid */
+  .genregrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .genreCard {
+    padding: 16px;
+    font-size: 14px;
+  }
+
+  /* Detail page */
+  .detailHero {
+    min-height: 500px;
+  }
+
+  .detailContent {
+    padding: 24px 4%;
+  }
+
+  .detailContent h1 {
+    font-size: clamp(22px, 5vw, 40px) !important;
+  }
+
+  .detailMeta {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .castGrid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  /* Watch Together */
+  .watchLayout {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .watchPlayerWrap {
+    border-radius: 0;
+    height: 56vw;
+    min-height: 220px;
+    max-height: 380px;
+  }
+
+  .streamIframe {
+    border-radius: 0;
+  }
+
+  .chat {
+    height: 400px;
+    max-height: 400px;
+    border-radius: 0;
+    border-left: none;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .watchTop {
+    padding: 12px 4%;
+  }
+
+  .watchTop h2 {
+    font-size: 15px;
+  }
+
+  .sync {
+    padding: 8px 4%;
+    font-size: 11px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Solo player */
+  .soloWatchPage {
+    padding: 16px 4% 80px;
+  }
+
+  .streamTopBar {
+    gap: 10px;
+  }
+
+  .streamMeta h1 {
+    font-size: 18px;
+  }
+
+  .serverPills {
+    gap: 6px;
+  }
+
+  /* Profile */
+  .profileHead {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .bigAvatar {
+    width: 80px;
+    height: 80px;
+    font-size: 28px;
+  }
+
+  .profileForm {
+    max-width: 100%;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .avatarPresetGrid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  /* Admin */
+  .statsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .adminTabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    gap: 4px;
+  }
+
+  .adminTab {
+    white-space: nowrap;
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .adminTableHead,
+  .adminTableRow {
+    grid-template-columns: 2fr 1fr;
+    font-size: 12px;
+  }
+
+  .adminTableHead span:nth-child(n+3),
+  .adminTableRow span:nth-child(n+3) {
+    display: none;
+  }
+
+  /* Search */
+  .searchBar {
+    padding: 10px 16px;
+    font-size: 15px;
+  }
+
+  /* Catalog filters */
+  .filterBar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Crop modal */
+  .cropModal {
+    max-width: 100%;
+    margin: 0 8px;
+    border-radius: 14px;
+  }
+
+  /* Settings */
+  .settingsList {
+    gap: 8px;
+  }
+}
+
+/* ── 480px: Large phones (most Android, iPhone 14/15) ────────── */
+@media (max-width: 480px) {
+  /* Nav */
+  .nav {
+    height: 56px;
+    padding: 0 4%;
+  }
+
+  .brand {
+    font-size: 17px;
+  }
+
+  .navlinks {
+    top: 56px;
+    padding: 14px 16px;
+  }
+
+  /* Page */
+  .page {
+    padding: 16px 4% 100px;
+  }
+
+  /* Hero */
+  .hero {
+    padding: 20px 4% 32px;
+    min-height: 80vh;
+  }
+
+  .hero h1 {
+    font-size: clamp(22px, 7vw, 34px) !important;
+    line-height: 1.1;
+  }
+
+  .hero .meta {
+    gap: 8px;
+    font-size: 12px;
+    margin: 10px 0;
+  }
+
+  .hero .chips {
+    gap: 6px;
+  }
+
+  .genreChip {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  .hero .actions {
+    gap: 8px;
+  }
+
+  .hero .btn {
+    padding: 10px 18px;
+    font-size: 13px;
+  }
+
+  /* Grid */
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  /* Row cards */
+  .row .card {
+    min-width: 120px;
+    max-width: 120px;
+  }
+
+  /* Genre grid */
+  .genregrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  /* Detail */
+  .detailHero {
+    min-height: 400px;
+  }
+
+  .detailContent h1 {
+    font-size: clamp(20px, 6vw, 32px) !important;
+  }
+
+  .castGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  /* Watch Together */
+  .watchPlayerWrap {
+    height: 58vw;
+    min-height: 200px;
+  }
+
+  .chat {
+    height: 360px;
+    max-height: 360px;
+  }
+
+  .chatHead {
+    padding: 10px 12px;
+  }
+
+  .chatTabBtn {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  .messages {
+    padding: 10px;
+  }
+
+  .msg {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+
+  .quickReactionStrip {
+    gap: 4px;
+    padding: 6px 10px;
+  }
+
+  .reactionBurstBtn {
+    font-size: 18px;
+    padding: 4px;
+  }
+
+  .chatInput {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .chatInput input {
+    font-size: 14px;
+  }
+
+  .watchTop {
+    padding: 10px 4%;
+    gap: 8px;
+  }
+
+  .roomcode {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+
+  /* Profile */
+  .bigAvatar {
+    width: 70px;
+    height: 70px;
+    font-size: 24px;
+  }
+
+  .avatarPresetGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .avatarPresetThumb {
+    width: 52px;
+    height: 52px;
+  }
+
+  /* Buttons */
+  .btn {
+    padding: 9px 16px;
+    font-size: 13px;
+  }
+
+  .btn.primary {
+    padding: 10px 18px;
+  }
+
+  /* Search page */
+  .searchPage {
+    padding: 16px 4%;
+  }
+
+  /* Stats grid */
+  .statsGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .statCard {
+    padding: 14px 16px;
+  }
+
+  .statNum {
+    font-size: 22px;
+  }
+
+  /* Continue grid */
+  .continueGrid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .continueCard img {
+    width: 72px;
+    height: 108px;
+  }
+
+  /* Modal */
+  .modalOverlay {
+    padding: 12px;
+  }
+
+  .cropModal {
+    border-radius: 12px;
+  }
+}
+
+/* ── 375px: Small phones (iPhone SE, Galaxy A series) ────────── */
+@media (max-width: 375px) {
+  .brand {
+    font-size: 15px;
+  }
+
+  .hero h1 {
+    font-size: clamp(20px, 7.5vw, 28px) !important;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .row .card {
+    min-width: 110px;
+    max-width: 110px;
+  }
+
+  .genregrid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .castGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .navlinks a {
+    font-size: 14px;
+  }
+
+  .chatInput input {
+    font-size: 13px;
+  }
+}
+
+/* ── Touch-friendly tweaks (all touch devices) ───────────────── */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger tap targets */
+  .btn {
+    min-height: 44px;
+  }
+
+  .iconbtn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .reactionBurstBtn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .navlinks a {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* Remove hover-only effects that feel broken on touch */
+  .card:hover {
+    transform: none;
+  }
+
+  .card:hover .cardOverlay {
+    opacity: 0;
+  }
+
+  .rowScrollBtn {
+    display: none !important;
+  }
+
+  /* Better tap feedback */
+  .card:active {
+    transform: scale(0.97);
+    transition: transform 0.1s;
+  }
+
+  .btn:active {
+    transform: scale(0.96);
+    transition: transform 0.1s;
+  }
+}
+
+/* ── Landscape phone fix ─────────────────────────────────────── */
+@media (max-width: 768px) and (orientation: landscape) {
+  .hero {
+    min-height: 100vw;
+    padding-bottom: 24px;
+  }
+
+  .watchPlayerWrap {
+    height: 50vh;
+  }
+
+  .chat {
+    height: 50vh;
+  }
+
+  .nav {
+    height: 52px;
+  }
+}
+
+/* ── Safe area for notched phones (iPhone X+) ────────────────── */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .page {
+    padding-bottom: max(80px, calc(80px + env(safe-area-inset-bottom)));
+  }
+
+  .nav {
+    padding-left: max(4%, env(safe-area-inset-left));
+    padding-right: max(4%, env(safe-area-inset-right));
+  }
+}
