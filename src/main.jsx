@@ -509,6 +509,7 @@ function Row({ title, items = [], list, toggleList, seeAllPath = "/movies", allo
       )}
     </section>
   );
+Row = React.memo(Row);
 }
 
 // ── Card ─────────────────────────────────────────────────────────
@@ -551,6 +552,7 @@ function Card({ m, list, toggleList }) {
       </button>
     </article>
   );
+Card = React.memo(Card);
 }
 
 // ── Home (Standard Stream Catalog: Trending, Popular, Now Playing, Top Rated, Action, Sci-Fi) ────
@@ -2082,7 +2084,6 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
       u: "SYSTEM",
       role: "Relay",
       avatar: "",
-      t: `⚡ Host broadcasted playback sync pulse across room ${roomId}. (0.00s drift)`,
       t: `\uD83D\uDCE1 Host broadcasted playback sync pulse across room ${roomId}. (0.00s drift)`,
       isSystem: true
     };
@@ -2133,7 +2134,6 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
           u: "TARS",
           role: "AI Security",
           avatar: "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=200&auto=format&fit=crop&q=80",
-          t: "🤖 Telemetry drift corrected: 0.00ms. All client relays locked in sync!",
           t: "\uD83E\uDD16 Telemetry drift corrected: 0.00ms. All client relays locked in sync!",
         };
         setMessages((prev) => [...prev, tarsMsg]);
@@ -2406,7 +2406,7 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
                       <div className="msgSenderHead">
                         <div className="msgMiniAvatar">
                           {x.avatar ? (
-                            <img src={x.avatar} alt={x.u} className="avatarImg" />
+                            <img src={x.avatar} alt={x.u} className="avatarImg"  loading="lazy" decoding="async" />
                           ) : (
                             x.initial || x.u[0]
                           )}
@@ -2461,7 +2461,7 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
                 ].map((c) => (
                   <div key={c.name} className="crewMemberCard">
                     <div className="crewAvatar">
-                      {c.avatar ? <img src={c.avatar} alt={c.name} className="avatarImg" /> : (c.initial || c.name[0])}
+                      {c.avatar ? <img src={c.avatar} alt={c.name} className="avatarImg"  loading="lazy" decoding="async" /> : (c.initial || c.name[0])}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -2519,7 +2519,7 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
                   className="pickerCard"
                   onClick={() => handleTitleSelect(m)}
                 >
-                  <img src={m.poster || FALLBACK_POSTER} alt={m.title} />
+                  <img src={m.poster || FALLBACK_POSTER} alt={m.title}  loading="lazy" decoding="async" />
                   <b>{m.title}</b>
                   <small>{m.type === "movie" ? "Movie" : "Series"} · {m.year}</small>
                 </div>
@@ -3377,7 +3377,7 @@ function Admin({ profile, list, allMedia = initialMedia }) {
             {filteredContent.slice(0, 50).map((m) => (
               <div className="adminTableRow" key={m.id} style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1.5fr 1.5fr" }}>
                 <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
-                  <img src={m.poster || FALLBACK_POSTER} alt={m.title} style={{ width: 24, height: 32, borderRadius: 4, objectFit: "cover" }} />
+                  <img src={m.poster || FALLBACK_POSTER} alt={m.title} style={{ width: 24, height: 32, borderRadius: 4, objectFit: "cover" }}  loading="lazy" decoding="async" />
                   {m.title}
                 </span>
                 <span>

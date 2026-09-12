@@ -1,6 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-
-:root {
+﻿:root {
   font-family: 'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif;
   color: #f8fafc;
   background: #030408;
@@ -314,7 +312,7 @@ input {
 }
 
 .hero h1 {
-  font-size: clamp(34px, 4.4vw, 58px) !important;
+  font-size: clamp(34px, 4.4vw, 58px);
   line-height: 1.05 !important;
   margin: 8px 0 10px !important;
   font-weight: 900;
@@ -1438,7 +1436,7 @@ input {
   }
 
   .hero h1 {
-    font-size: clamp(28px, 6vw, 44px) !important;
+    font-size: clamp(28px, 6vw, 44px);
   }
 
   .genregrid {
@@ -3372,7 +3370,7 @@ input {
   }
 
   .detailContent h1 {
-    font-size: clamp(28px, 5vw, 56px) !important;
+    font-size: clamp(28px, 5vw, 56px);
   }
 
   .profileHead {
@@ -3443,7 +3441,7 @@ input {
   }
 
   .hero h1 {
-    font-size: clamp(26px, 6vw, 40px) !important;
+    font-size: clamp(26px, 6vw, 40px);
   }
 
   .heroDescText {
@@ -3522,7 +3520,7 @@ input {
   }
 
   .detailContent h1 {
-    font-size: clamp(22px, 5vw, 40px) !important;
+    font-size: clamp(22px, 5vw, 40px);
   }
 
   .detailMeta {
@@ -3704,7 +3702,7 @@ input {
   }
 
   .hero h1 {
-    font-size: clamp(22px, 7vw, 34px) !important;
+    font-size: clamp(22px, 7vw, 34px);
     line-height: 1.1;
   }
 
@@ -3756,7 +3754,7 @@ input {
   }
 
   .detailContent h1 {
-    font-size: clamp(20px, 6vw, 32px) !important;
+    font-size: clamp(20px, 6vw, 32px);
   }
 
   .castGrid {
@@ -3895,7 +3893,7 @@ input {
   }
 
   .hero h1 {
-    font-size: clamp(20px, 7.5vw, 28px) !important;
+    font-size: clamp(20px, 7.5vw, 28px);
   }
 
   .grid {
