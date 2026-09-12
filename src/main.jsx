@@ -1651,7 +1651,7 @@ function SoloWatch({ list, toggleList, onPlayTrailer, allMedia = initialMedia })
   const season = parseInt(searchParams.get("season")) || 1;
   const episode = parseInt(searchParams.get("episode")) || 1;
 
-  const [showConfig, setShowConfig] = useState(true);
+  const [showConfig, setShowConfig] = useState(false);
   const [copiedQuery, setCopiedQuery] = useState(false);
 
   useEffect(() => {
