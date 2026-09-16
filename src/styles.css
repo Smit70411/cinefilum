@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   font-family: 'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif;
   color: #f8fafc;
   background: #030408;
@@ -743,7 +743,10 @@ input {
   display: flex;
   gap: 18px;
   overflow-x: auto;
-  padding: 10px 0 26px;
+  overflow-y: hidden;
+  padding: 24px 8px 28px;
+  margin-top: -14px;
+  margin-bottom: -14px;
   scrollbar-width: none;
   scroll-behavior: smooth;
   width: 100%;
@@ -3487,7 +3490,10 @@ input {
 
   .row {
     gap: 10px;
-    padding-bottom: 8px;
+    padding-top: 20px;
+    padding-bottom: 16px;
+    margin-top: -12px;
+    margin-bottom: -12px;
   }
 
   .row .card {
