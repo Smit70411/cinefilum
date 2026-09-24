@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -35,7 +35,11 @@ import {
   Camera,
   Save,
   LogOut,
-  Sliders
+  Sliders,
+  ArrowUp,
+  Share2,
+  HelpCircle,
+  Command
 } from "lucide-react";
 import {
   initialMedia,
@@ -110,8 +114,88 @@ function getTitle(id, list = initialMedia) {
   return found || initialMedia[0];
 }
 
+// ── Toast Context ────────────────────────────────────────────────
+export const ToastContext = React.createContext({ showToast: () => {} });
+export const useToast = () => React.useContext(ToastContext);
+
+// ── Watch History Store (localStorage-backed) ───────────────────
+const WATCH_HISTORY_KEY = "cf_watch_history";
+
+function getWatchHistory() {
+  try {
+    const raw = localStorage.getItem(WATCH_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function recordWatchHistory(media, season = 1, episode = 1) {
+  if (!media || !media.id) return;
+  try {
+    const history = getWatchHistory();
+    const item = {
+      id: media.id,
+      tmdbId: media.tmdbId,
+      title: media.title,
+      poster: media.poster || FALLBACK_POSTER,
+      backdrop: media.backdrop,
+      type: media.type || "movie",
+      year: media.year,
+      rating: media.rating,
+      season: Number(season) || 1,
+      episode: Number(episode) || 1,
+      timestamp: Date.now()
+    };
+    const filtered = history.filter((h) => String(h.id) !== String(media.id));
+    const next = [item, ...filtered].slice(0, 30);
+    localStorage.setItem(WATCH_HISTORY_KEY, JSON.stringify(next));
+  } catch (err) {
+    console.warn("Storage error in recordWatchHistory:", err);
+  }
+}
+
+function removeWatchHistoryItem(id) {
+  try {
+    const history = getWatchHistory();
+    const next = history.filter((h) => String(h.id) !== String(id));
+    localStorage.setItem(WATCH_HISTORY_KEY, JSON.stringify(next));
+    return next;
+  } catch {
+    return [];
+  }
+}
+
+function clearWatchHistory() {
+  try {
+    localStorage.removeItem(WATCH_HISTORY_KEY);
+  } catch {}
+}
+
+function formatTimeAgo(timestamp) {
+  if (!timestamp) return "Recently";
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return "Just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "Yesterday";
+  if (days < 30) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString();
+}
+
 function App() {
-  const [list, setList] = useState(["m-1", "m-2", "tv-1"]);
+  const navigate = useNavigate();
+  const [list, setList] = useState(() => {
+    try {
+      const saved = localStorage.getItem("cf_my_list");
+      return saved ? JSON.parse(saved) : ["m-1", "m-2", "tv-1"];
+    } catch {
+      return ["m-1", "m-2", "tv-1"];
+    }
+  });
   const [menu, setMenu] = useState(false);
   const [activeTrailer, setActiveTrailer] = useState(null);
   const [profile, setProfile] = useState(loadProfile);
@@ -120,10 +204,23 @@ function App() {
     try { return localStorage.getItem("cf_feed_mode") || "dynamic"; }
     catch { return "dynamic"; }
   });
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+
+  const showToast = useCallback((message, type = "info") => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ id: Date.now(), message, type });
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+    }, 3200);
+  }, []);
 
   const toggleFeedMode = (mode) => {
     setFeedMode(mode);
     localStorage.setItem("cf_feed_mode", mode);
+    showToast(`Feed mode switched to ${mode}`, "info");
   };
 
   useEffect(() => {
@@ -134,13 +231,69 @@ function App() {
     });
   }, []);
 
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 400);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) {
+        if (e.key === "Escape") e.target.blur();
+        return;
+      }
+      if (e.key === "Escape") {
+        setActiveTrailer(null);
+        setShowShortcuts(false);
+        setMenu(false);
+      } else if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        navigate("/search");
+      } else if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+        e.preventDefault();
+        setShowShortcuts((prev) => !prev);
+      } else if (e.key.toLowerCase() === "h" && !e.ctrlKey && !e.metaKey) {
+        navigate("/");
+      } else if (e.key.toLowerCase() === "m" && !e.ctrlKey && !e.metaKey) {
+        navigate("/movies");
+      } else if (e.key.toLowerCase() === "t" && !e.ctrlKey && !e.metaKey) {
+        navigate("/tv-shows");
+      } else if (e.key.toLowerCase() === "a" && !e.ctrlKey && !e.metaKey) {
+        navigate("/anime");
+      } else if (e.key.toLowerCase() === "l" && !e.ctrlKey && !e.metaKey) {
+        navigate("/my-list");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [navigate]);
+
   const toggleList = (id) => {
-    setList((x) => (x.includes(id) ? x.filter((v) => v !== id) : [...x, id]));
+    const item = getTitle(id, allMedia);
+    const titleName = item?.title || "Title";
+    setList((x) => {
+      const isAdding = !x.includes(id);
+      const next = isAdding ? [...x, id] : x.filter((v) => v !== id);
+      try {
+        localStorage.setItem("cf_my_list", JSON.stringify(next));
+      } catch (err) {
+        console.warn("Error saving list", err);
+      }
+      showToast(
+        isAdding ? `Added "${titleName}" to My List` : `Removed "${titleName}" from My List`,
+        isAdding ? "success" : "info"
+      );
+      return next;
+    });
   };
 
   const updateProfile = (p) => {
     setProfile(p);
     saveProfile(p);
+    showToast("Profile updated successfully", "success");
   };
 
   const handlePlayTrailer = async (media) => {
@@ -174,105 +327,153 @@ function App() {
   const isAdmin = profile.role === "admin";
 
   return (
-    <div className="app">
-      <header className="nav">
-        <Link to="/" className="brand">
-          <Compass size={22} color="#f59e0b" style={{ marginRight: 4 }} />
-          CINE<span>FILUM</span>
-        </Link>
-        <nav className={menu ? "navlinks open" : "navlinks"}>
-          {[
-            { name: "Home", path: "/" },
-            { name: "Movies", path: "/movies" },
-            { name: "TV Series", path: "/tv-shows" },
-            { name: "Anime", path: "/anime" },
-            { name: "Genres", path: "/genres" },
-            { name: "My List", path: "/my-list" },
-            { name: "Watch Together", path: "/watch-together" },
-            ...(isAdmin ? [{ name: "Admin", path: "/admin" }] : [])
-          ].map((x) => (
-            <Link key={x.name} to={x.path} onClick={() => setMenu(false)}>
-              {x.name}
+    <ToastContext.Provider value={{ showToast }}>
+      <div className="app">
+        <header className="nav">
+          <Link to="/" className="brand">
+            <Compass size={22} color="#f59e0b" style={{ marginRight: 4 }} />
+            CINE<span>FILUM</span>
+          </Link>
+          <nav className={menu ? "navlinks open" : "navlinks"}>
+            {[
+              { name: "Home", path: "/" },
+              { name: "Movies", path: "/movies" },
+              { name: "TV Series", path: "/tv-shows" },
+              { name: "Anime", path: "/anime" },
+              { name: "Genres", path: "/genres" },
+              { name: "My List", path: "/my-list" },
+              { name: "Watch Together", path: "/watch-together" },
+              ...(isAdmin ? [{ name: "Admin", path: "/admin" }] : [])
+            ].map((x) => (
+              <Link key={x.name} to={x.path} onClick={() => setMenu(false)}>
+                {x.name}
+              </Link>
+            ))}
+          </nav>
+          <div className="navright">
+            <Link to="/search" aria-label="Search" title="Search (/)">
+              <Search size={20} />
             </Link>
-          ))}
-        </nav>
-        <div className="navright">
-          <Link to="/search" aria-label="Search">
-            <Search size={20} />
-          </Link>
-          <Link to="/profile" className="avatar" title={profile.name}>
-            {profile.avatar ? (
-              <img src={profile.avatar} alt={profile.name} className="avatarImg" />
-            ) : (
-              profile.initial || "U"
-            )}
-          </Link>
-          <button className="menubtn" onClick={() => setMenu(!menu)} aria-label="Menu">
-            {menu ? <X size={22} /> : <Menu size={22} />}
-          </button>
-        </div>
-      </header>
-
-      {/* Official Dynamic Movie Trailer Modal */}
-      {activeTrailer && (
-        <div className="trailerOverlay" onClick={() => setActiveTrailer(null)}>
-          <div className="trailerModal" onClick={(e) => e.stopPropagation()}>
-            <div className="trailerHeader">
-              <b>{activeTrailer.title} — Official Trailer</b>
-              <button className="closeBtn" onClick={() => setActiveTrailer(null)}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className="trailerVideoWrap">
-              {activeTrailer.loading ? (
-                <div style={{ display: "grid", placeItems: "center", height: "100%", color: "#f59e0b" }}>
-                  <div style={{ textAlign: "center" }}>
-                    <Sparkles size={24} style={{ animation: "spin 2s linear infinite", marginBottom: 8 }} />
-                    <p style={{ margin: 0, fontWeight: 600 }}>Loading official trailer for "{activeTrailer.title}"...</p>
-                  </div>
-                </div>
-              ) : activeTrailer.trailerId ? (
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${activeTrailer.trailerId}?autoplay=1&rel=0`}
-                  title={activeTrailer.title}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+            <button
+              onClick={() => setShowShortcuts(true)}
+              title="Keyboard Shortcuts (?)"
+              aria-label="Keyboard Shortcuts"
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#94a3b8",
+                cursor: "pointer",
+                display: "grid",
+                placeItems: "center",
+                padding: "4px"
+              }}
+            >
+              <Command size={18} />
+            </button>
+            <Link to="/profile" className="avatar" title={profile.name}>
+              {profile.avatar ? (
+                <img src={profile.avatar} alt={profile.name} className="avatarImg" />
               ) : (
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(activeTrailer.title + " Official Trailer " + (activeTrailer.year || ""))}&autoplay=1&rel=0`}
-                  title={activeTrailer.title}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+                profile.initial || "U"
               )}
+            </Link>
+            <button className="menubtn" onClick={() => setMenu(!menu)} aria-label="Menu">
+              {menu ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
+        </header>
+
+        {/* Official Dynamic Movie Trailer Modal */}
+        {activeTrailer && (
+          <div className="trailerOverlay" onClick={() => setActiveTrailer(null)}>
+            <div className="trailerModal" onClick={(e) => e.stopPropagation()}>
+              <div className="trailerHeader">
+                <b>{activeTrailer.title} — Official Trailer</b>
+                <button className="closeBtn" onClick={() => setActiveTrailer(null)}>
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="trailerVideoWrap">
+                {activeTrailer.loading ? (
+                  <div style={{ display: "grid", placeItems: "center", height: "100%", color: "#f59e0b" }}>
+                    <div style={{ textAlign: "center" }}>
+                      <Sparkles size={24} style={{ animation: "spin 2s linear infinite", marginBottom: 8 }} />
+                      <p style={{ margin: 0, fontWeight: 600 }}>Loading official trailer for "{activeTrailer.title}"...</p>
+                    </div>
+                  </div>
+                ) : activeTrailer.trailerId ? (
+                  <iframe
+                    src={`https://www.youtube-nocookie.com/embed/${activeTrailer.trailerId}?autoplay=1&rel=0`}
+                    title={activeTrailer.title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <iframe
+                    src={`https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(activeTrailer.title + " Official Trailer " + (activeTrailer.year || ""))}&autoplay=1&rel=0`}
+                    title={activeTrailer.title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <Routes>
-        <Route path="/" element={<Home list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} feedMode={feedMode} toggleFeedMode={toggleFeedMode} />} />
-        <Route path="/movies" element={<Catalog type="movie" title="Movies" list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} feedMode={feedMode} />} />
-        <Route path="/tv-shows" element={<Catalog type="tv" title="TV Series" list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} feedMode={feedMode} />} />
-        <Route path="/anime" element={<Catalog type="anime" title="Anime Series & Movies" list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} feedMode={feedMode} />} />
-        <Route path="/genres" element={<Genres allMedia={allMedia} list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} />} />
-        <Route path="/my-list" element={<MyList list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
-        <Route path="/continue-watching" element={<Continue allMedia={allMedia} />} />
-        <Route path="/search" element={<SearchPage list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
-        <Route path="/profile" element={<Profile list={list} toggleList={toggleList} profile={profile} updateProfile={updateProfile} allMedia={allMedia} />} />
-        <Route path="/create-profile" element={<CreateProfile profile={profile} updateProfile={updateProfile} />} />
-        <Route path="/settings" element={<Settings profile={profile} updateProfile={updateProfile} feedMode={feedMode} toggleFeedMode={toggleFeedMode} />} />
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route path="/watch-together" element={<WatchTogether profile={profile} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
-        <Route path="/watch/:id" element={<SoloWatch list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
-        <Route path="/admin" element={<Admin profile={profile} list={list} allMedia={allMedia} />} />
-        <Route path="/admin-login" element={<AdminLogin profile={profile} updateProfile={updateProfile} />} />
-        <Route path="/title/:id" element={<Details list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
-        <Route path="/recommendations/:id" element={<RecommendationsPage list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
-        <Route path="*" element={<Home list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} feedMode={feedMode} toggleFeedMode={toggleFeedMode} />} />
-      </Routes>
-    </div>
+        {/* Global Floating Toast */}
+        {toast && (
+          <div className={`cosmicToast ${toast.type}`}>
+            <div className="toastIcon">
+              {toast.type === "success" ? <Check size={18} /> : <Sparkles size={18} />}
+            </div>
+            <span className="toastMsg">{toast.message}</span>
+            <button className="toastClose" onClick={() => setToast(null)} aria-label="Close notification">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        {/* Back to Top Floating Button */}
+        {showBackToTop && (
+          <button
+            className="backToTopBtn"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            aria-label="Back to top"
+            title="Back to top"
+          >
+            <ArrowUp size={20} />
+          </button>
+        )}
+
+        {/* Global Keyboard Shortcuts Modal */}
+        <KeyboardShortcutsModal isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
+
+        <Routes>
+          <Route path="/" element={<Home list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} feedMode={feedMode} toggleFeedMode={toggleFeedMode} />} />
+          <Route path="/movies" element={<Catalog type="movie" title="Movies" list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} feedMode={feedMode} />} />
+          <Route path="/tv-shows" element={<Catalog type="tv" title="TV Series" list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} feedMode={feedMode} />} />
+          <Route path="/anime" element={<Catalog type="anime" title="Anime Series & Movies" list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} feedMode={feedMode} />} />
+          <Route path="/genres" element={<Genres allMedia={allMedia} list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} />} />
+          <Route path="/my-list" element={<MyList list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
+          <Route path="/continue-watching" element={<Continue allMedia={allMedia} />} />
+          <Route path="/search" element={<SearchPage list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
+          <Route path="/profile" element={<Profile list={list} toggleList={toggleList} profile={profile} updateProfile={updateProfile} allMedia={allMedia} />} />
+          <Route path="/create-profile" element={<CreateProfile profile={profile} updateProfile={updateProfile} />} />
+          <Route path="/settings" element={<Settings profile={profile} updateProfile={updateProfile} feedMode={feedMode} toggleFeedMode={toggleFeedMode} />} />
+          <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/watch-together" element={<WatchTogether profile={profile} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
+          <Route path="/watch/:id" element={<SoloWatch list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
+          <Route path="/admin" element={<Admin profile={profile} list={list} allMedia={allMedia} />} />
+          <Route path="/admin-login" element={<AdminLogin profile={profile} updateProfile={updateProfile} />} />
+          <Route path="/title/:id" element={<Details list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
+          <Route path="/recommendations/:id" element={<RecommendationsPage list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+
+        <Footer onOpenShortcuts={() => setShowShortcuts(true)} />
+      </div>
+    </ToastContext.Provider>
   );
 }
 
@@ -1185,38 +1386,101 @@ function MyList({ list, toggleList }) {
 }
 
 // ── Continue Watching ────────────────────────────────────────────
-function Continue() {
+function Continue({ allMedia = initialMedia }) {
+  const [history, setHistory] = useState(getWatchHistory);
+  const { showToast } = useToast();
+
+  const handleRemove = (id, title) => {
+    const updated = removeWatchHistoryItem(id);
+    setHistory(updated);
+    showToast(`Removed "${title}" from history`, "info");
+  };
+
+  const handleClear = () => {
+    if (window.confirm("Are you sure you want to clear your entire watch history?")) {
+      clearWatchHistory();
+      setHistory([]);
+      showToast("Watch history cleared", "info");
+    }
+  };
+
   return (
     <main className="page">
-      <span className="eyebrow">IN PROGRESS</span>
-      <h1>Continue Watching</h1>
-      <div className="continueGrid">
-        {initialMedia.slice(0, 4).map((m, i) => (
-          <div className="continueCard" key={m.id}>
-            <img
-              src={m.poster || FALLBACK_POSTER}
-              alt={m.title}
-              onError={(e) => {
-                e.currentTarget.onerror = null;
-                e.currentTarget.src = FALLBACK_POSTER;
-              }}
-            />
-            <div style={{ flex: 1 }}>
-              <span className="typeBadge">{m.type === "movie" ? "Film" : "Series"}</span>
-              <h3 style={{ margin: "6px 0 2px" }}>{m.title}</h3>
-              <p style={{ margin: 0, fontSize: "14px" }}>
-                {m.type === "tv" ? `Season 1 · Episode 0${i + 2}` : "1h 14m remaining"}
-              </p>
-              <div className="progress">
-                <i style={{ width: 30 + i * 18 + "%" }} />
-              </div>
-              <Link to={`/watch/${m.id}`} className="btn primary" style={{ padding: "8px 18px", fontSize: "13px" }}>
-                <Play size={14} fill="currentColor" /> Resume
-              </Link>
-            </div>
-          </div>
-        ))}
+      <div className="sectionHead">
+        <div>
+          <span className="eyebrow">IN PROGRESS</span>
+          <h1>Continue Watching</h1>
+        </div>
+        {history.length > 0 && (
+          <button className="btn" onClick={handleClear} style={{ fontSize: "13px", padding: "8px 14px" }}>
+            <Trash2 size={15} /> Clear History
+          </button>
+        )}
       </div>
+
+      {history.length > 0 ? (
+        <div className="continueGrid">
+          {history.map((m) => (
+            <div className="continueCard" key={m.id}>
+              <div className="continuePosterWrap">
+                <img
+                  src={m.poster || FALLBACK_POSTER}
+                  alt={m.title}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = FALLBACK_POSTER;
+                  }}
+                />
+                <button
+                  className="continueRemoveBtn"
+                  onClick={() => handleRemove(m.id, m.title)}
+                  title="Remove from history"
+                  aria-label="Remove"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="typeBadge">{m.type === "movie" ? "Film" : "Series"}</span>
+                  <span className="continueTimeBadge">{formatTimeAgo(m.timestamp)}</span>
+                </div>
+                <h3 style={{ margin: "6px 0 2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {m.title}
+                </h3>
+                <p style={{ margin: "0 0 8px", fontSize: "13px", color: "#94a3b8" }}>
+                  {m.type === "tv" ? `Season ${m.season || 1} · Episode ${m.episode || 1}` : (m.year ? `Released in ${m.year}` : "In Progress")}
+                </p>
+                <div className="progress" style={{ marginBottom: "12px" }}>
+                  <i style={{ width: "68%" }} />
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Link
+                    to={`/watch/${m.id}?season=${m.season || 1}&episode=${m.episode || 1}`}
+                    className="btn primary"
+                    style={{ padding: "7px 16px", fontSize: "13px" }}
+                  >
+                    <Play size={14} fill="currentColor" /> Resume
+                  </Link>
+                  <Link
+                    to={`/title/${m.id}`}
+                    className="btn"
+                    style={{ padding: "7px 12px", fontSize: "13px" }}
+                    title="Details"
+                  >
+                    <Info size={14} />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Empty
+          title="No Watch History Yet"
+          text="Movies and TV shows you start watching will appear here automatically so you can resume anytime."
+        />
+      )}
     </main>
   );
 }
@@ -1227,6 +1491,31 @@ function SearchPage({ list, toggleList, onPlayTrailer, allMedia = initialMedia }
   const [results, setResults] = useState(allMedia);
   const [loading, setLoading] = useState(false);
   const [displayCount, setDisplayCount] = useState(24);
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try {
+      const saved = localStorage.getItem("cf_recent_searches");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const saveRecentSearch = (term) => {
+    if (!term || term.trim().length < 2) return;
+    const clean = term.trim();
+    setRecentSearches((prev) => {
+      const next = [clean, ...prev.filter((x) => x.toLowerCase() !== clean.toLowerCase())].slice(0, 6);
+      try {
+        localStorage.setItem("cf_recent_searches", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const clearRecentSearches = () => {
+    localStorage.removeItem("cf_recent_searches");
+    setRecentSearches([]);
+  };
 
   useEffect(() => {
     let active = true;
@@ -1238,6 +1527,7 @@ function SearchPage({ list, toggleList, onPlayTrailer, allMedia = initialMedia }
 
     setLoading(true);
     const timeout = setTimeout(async () => {
+      saveRecentSearch(q);
       const data = await searchMedia(q);
       if (active) {
         setResults(deduplicateMedia(data));
@@ -1264,8 +1554,34 @@ function SearchPage({ list, toggleList, onPlayTrailer, allMedia = initialMedia }
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
+        {q && (
+          <button
+            className="searchClearBtn"
+            onClick={() => setQ("")}
+            aria-label="Clear search"
+            title="Clear search"
+          >
+            <X size={18} />
+          </button>
+        )}
         {loading && <small style={{ color: "#f59e0b" }}>Searching...</small>}
       </div>
+
+      {recentSearches.length > 0 && !q && (
+        <div className="searchBadges recentSearchesRow">
+          <span style={{ fontSize: "12px", color: "#94a3b8", display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <Clock size={12} /> Recent:
+          </span>
+          {recentSearches.map((s) => (
+            <span key={s} className="recentChip" onClick={() => setQ(s)}>
+              {s}
+            </span>
+          ))}
+          <button className="clearRecentBtn" onClick={clearRecentSearches} title="Clear recent searches">
+            <Trash2 size={13} />
+          </button>
+        </div>
+      )}
 
       <div className="searchBadges">
         <span style={{ fontSize: "12px", color: "var(--gold-flare)", background: "transparent", border: 0, padding: 0 }}>
@@ -1315,9 +1631,25 @@ function SearchPage({ list, toggleList, onPlayTrailer, allMedia = initialMedia }
 function Details({ list, toggleList, onPlayTrailer, allMedia = initialMedia }) {
   const { id } = useParams();
   const nav = useNavigate();
+  const { showToast } = useToast();
   const [m, setM] = useState(() => getTitle(id, allMedia));
   const [accurateRecs, setAccurateRecs] = useState([]);
   const [loadingRecs, setLoadingRecs] = useState(true);
+
+  const handleShare = () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      navigator.share({
+        title: (m.title || "Movie") + " | Cinefilum",
+        text: `Watch ${m.title} on Cinefilum`,
+        url
+      }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        showToast("Title link copied to clipboard!", "success");
+      });
+    }
+  };
 
   // Scroll to top and hydrate details with full accuracy
   useEffect(() => {
@@ -1441,6 +1773,9 @@ function Details({ list, toggleList, onPlayTrailer, allMedia = initialMedia }) {
             </Link>
             <button className="btn" onClick={() => toggleList(m.id)}>
               {list.includes(m.id) ? "✓ Saved" : "+ Add to List"}
+            </button>
+            <button className="btn" onClick={handleShare} title="Share Title" aria-label="Share">
+              <Share2 size={18} /> Share
             </button>
           </div>
         </div>
@@ -1658,10 +1993,14 @@ function SoloWatch({ list, toggleList, onPlayTrailer, allMedia = initialMedia })
     window.scrollTo({ top: 0, behavior: "instant" });
     const local = getTitle(id, allMedia);
     setResolvedMedia(local);
+    recordWatchHistory(local, season, episode);
     fetchMediaDetailsById(id).then((fullItem) => {
-      if (fullItem) setResolvedMedia(fullItem);
+      if (fullItem) {
+        setResolvedMedia(fullItem);
+        recordWatchHistory(fullItem, season, episode);
+      }
     });
-  }, [id, allMedia]);
+  }, [id, allMedia, season, episode]);
 
   // Helper to update a URL query parameter
   const updateParam = (key, val) => {
@@ -1973,6 +2312,7 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
   const roomParam = searchParams.get("room") || ("CF-" + Math.random().toString(36).substring(2,6).toUpperCase());
   const initialId = searchParams.get("id") || "m-1";
 
+  const { showToast } = useToast();
   const [roomId, setRoomId] = useState(roomParam);
   const [currentId, setCurrentId] = useState(initialId);
   const [currentMedia, setCurrentMedia] = useState(() => getTitle(initialId, allMedia));
@@ -2012,9 +2352,12 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
   // Sync with currentId media item
   useEffect(() => {
     fetchMediaDetailsById(currentId).then((item) => {
-      if (item) setCurrentMedia(item);
+      if (item) {
+        setCurrentMedia(item);
+        recordWatchHistory(item, season, episode);
+      }
     });
-  }, [currentId]);
+  }, [currentId, season, episode]);
 
   // Keep search params in sync with state
   useEffect(() => {
@@ -2073,6 +2416,7 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
     const url = window.location.origin + "/watch-together?room=" + encodeURIComponent(roomId) + "&id=" + currentId + "&server=" + server + "&season=" + season + "&episode=" + episode;
     navigator.clipboard?.writeText(url);
     setCopied(true);
+    showToast("Watch Together room link copied to clipboard!", "success");
     setTimeout(() => setCopied(false), 2200);
   };
 
@@ -3721,6 +4065,160 @@ function Empty({ title, text }) {
       <h2 style={{ margin: "12px 0 6px" }}>{title}</h2>
       <p>{text}</p>
     </div>
+  );
+}
+
+// ── Keyboard Shortcuts Modal ──────────────────────────────────────
+function KeyboardShortcutsModal({ isOpen, onClose }) {
+  if (!isOpen) return null;
+
+  const shortcuts = [
+    {
+      category: "Navigation",
+      items: [
+        { key: "/", desc: "Open Search from anywhere" },
+        { key: "H", desc: "Go to Home Orbit" },
+        { key: "M", desc: "Explore Movies catalog" },
+        { key: "T", desc: "Explore TV Series catalog" },
+        { key: "A", desc: "Explore Anime catalog" },
+        { key: "L", desc: "Go to My Saved List" }
+      ]
+    },
+    {
+      category: "Controls & Modals",
+      items: [
+        { key: "Esc", desc: "Close any open modal or trailer" },
+        { key: "?", desc: "Toggle this Keyboard Shortcuts guide" },
+        { key: "Space / K", desc: "Play / Pause video player" },
+        { key: "F", desc: "Toggle Fullscreen mode" },
+        { key: "M", desc: "Mute / Unmute audio (in player)" }
+      ]
+    }
+  ];
+
+  return (
+    <div className="trailerOverlay" onClick={onClose}>
+      <div className="shortcutsModal" onClick={(e) => e.stopPropagation()}>
+        <div className="shortcutsHeader">
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Command size={20} color="#f59e0b" />
+            <h3 style={{ margin: 0, fontSize: "18px", color: "#f8fafc" }}>Keyboard Shortcuts</h3>
+          </div>
+          <button className="closeBtn" onClick={onClose} aria-label="Close shortcuts">
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="shortcutsBody">
+          {shortcuts.map((cat) => (
+            <div key={cat.category} className="shortcutGroup">
+              <h4>{cat.category}</h4>
+              <div className="shortcutList">
+                {cat.items.map((item) => (
+                  <div key={item.key} className="shortcutItem">
+                    <span className="shortcutDesc">{item.desc}</span>
+                    <kbd className="shortcutKbd">{item.key}</kbd>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="shortcutsFooter">
+          <span>Pro tip: Press <kbd className="shortcutKbd mini">?</kbd> anywhere to quickly toggle this guide</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 404 Not Found Page ─────────────────────────────────────────────
+function NotFound() {
+  return (
+    <main className="page notFoundPage">
+      <div className="notFoundContainer">
+        <div className="notFoundGlow" />
+        <div className="notFoundCode">404</div>
+        <div className="notFoundIconWrap">
+          <Compass size={48} color="#f59e0b" className="notFoundCompass" />
+        </div>
+        <h1 className="notFoundTitle">Lost in Deep Space</h1>
+        <p className="notFoundText">
+          The celestial coordinates you followed do not exist or have drifted past the cosmic event horizon.
+        </p>
+        <div className="notFoundActions">
+          <Link to="/" className="btn primary">
+            <Compass size={18} /> Return to Home
+          </Link>
+          <Link to="/movies" className="btn">
+            <Film size={18} /> Browse Movies
+          </Link>
+          <Link to="/search" className="btn">
+            <Search size={18} /> Search Universe
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+// ── Rich Cosmic Footer ─────────────────────────────────────────────
+function Footer({ onOpenShortcuts }) {
+  return (
+    <footer className="cosmicFooter">
+      <div className="footerInner">
+        <div className="footerBrandCol">
+          <Link to="/" className="brand">
+            <Compass size={24} color="#f59e0b" style={{ marginRight: 6 }} />
+            CINE<span>FILUM</span>
+          </Link>
+          <p className="footerDesc">
+            Your portal to cinematic universes. Stream movies, explore TV series, immerse in anime, and watch together with friends in real-time.
+          </p>
+          <div className="footerStatus">
+            <span className="statusDot" /> Cosmic Core Online · Fast Streaming CDN
+          </div>
+        </div>
+
+        <div className="footerCol">
+          <h4>Explore</h4>
+          <Link to="/">Home Orbit</Link>
+          <Link to="/movies">Featured Movies</Link>
+          <Link to="/tv-shows">TV Series</Link>
+          <Link to="/anime">Anime Masterpieces</Link>
+          <Link to="/genres">Genre Constellations</Link>
+        </div>
+
+        <div className="footerCol">
+          <h4>Features</h4>
+          <Link to="/watch-together">Watch Together (Sync)</Link>
+          <Link to="/continue-watching">Continue Watching</Link>
+          <Link to="/my-list">My Saved List</Link>
+          <Link to="/search">Cosmic Search</Link>
+          <Link to="/onboarding">Tour & Onboarding</Link>
+        </div>
+
+        <div className="footerCol">
+          <h4>Account & Info</h4>
+          <Link to="/profile">Explorer Profile</Link>
+          <Link to="/settings">Player Settings</Link>
+          <Link to="/admin">Admin Deck</Link>
+          <button className="footerShortcutLink" onClick={onOpenShortcuts}>
+            ⌨️ Keyboard Shortcuts
+          </button>
+        </div>
+      </div>
+
+      <div className="footerBottom">
+        <div className="footerCopy">
+          © {new Date().getFullYear()} CINEFILUM. Open-source under MIT License.
+        </div>
+        <div className="footerAttribution">
+          Powered by TMDB & VidSrc APIs. This product uses the TMDB API but is not endorsed or certified by TMDB.
+        </div>
+      </div>
+    </footer>
   );
 }
 
