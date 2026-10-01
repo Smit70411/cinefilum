@@ -1,4 +1,10 @@
 User-agent: *
+Disallow: /watch/
+Disallow: /title/
+Disallow: /admin
+Disallow: /admin-login
+Disallow: /profile
+Disallow: /settings
 Allow: /
 
 Sitemap: https://cinefilum.vercel.app/sitemap.xml

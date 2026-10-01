@@ -27,6 +27,7 @@ import {
   Radio,
   Clock,
   Shield,
+  ShieldAlert,
   UserPlus,
   BarChart2,
   Settings2,
@@ -49,6 +50,13 @@ import {
   getPopularMediaList,
   getTopRatedMediaList
 } from "./data/moviesData";
+import {
+  isBlacklisted,
+  getBlacklistEntry,
+  getAllBlacklisted,
+  addBlacklistEntry,
+  removeBlacklistEntry
+} from "./data/blacklist";
 import {
   searchMedia,
   getTmdbApiKey,
@@ -108,6 +116,22 @@ function saveProfile(p) {
 }
 
 function getTitle(id, list = initialMedia) {
+  if (isBlacklisted(id)) {
+    const entry = getBlacklistEntry(id);
+    return {
+      id: String(id),
+      tmdbId: entry?.tmdbId || String(id).replace("tmdb-", ""),
+      title: entry?.title || "Content Unavailable",
+      blocked: true,
+      reason: entry?.reason || "Removed pursuant to copyright takedown notice",
+      claimant: entry?.claimant || "Copyright Owner / Agent",
+      refId: entry?.refId,
+      date: entry?.date || "2026-09-30",
+      type: "movie",
+      year: entry?.date?.split("-")[0] || "2026",
+      desc: "This content is unavailable due to an intellectual property removal request."
+    };
+  }
   const cached = getCachedMedia(id);
   if (cached) return cached;
   const found = list.find((m) => String(m.id) === String(id) || String(m.tmdbId) === String(id));
@@ -131,7 +155,7 @@ function getWatchHistory() {
 }
 
 function recordWatchHistory(media, season = 1, episode = 1) {
-  if (!media || !media.id) return;
+  if (!media || !media.id || media.blocked || isBlacklisted(media.id)) return;
   try {
     const history = getWatchHistory();
     const item = {
@@ -468,6 +492,8 @@ function App() {
           <Route path="/admin-login" element={<AdminLogin profile={profile} updateProfile={updateProfile} />} />
           <Route path="/title/:id" element={<Details list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
           <Route path="/recommendations/:id" element={<RecommendationsPage list={list} toggleList={toggleList} onPlayTrailer={handlePlayTrailer} allMedia={allMedia} />} />
+          <Route path="/dmca" element={<DmcaPage />} />
+          <Route path="/copyright" element={<DmcaPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
 
@@ -1654,6 +1680,11 @@ function Details({ list, toggleList, onPlayTrailer, allMedia = initialMedia }) {
   // Scroll to top and hydrate details with full accuracy
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
+    if (isBlacklisted(id)) {
+      setM(getTitle(id, allMedia));
+      setLoadingRecs(false);
+      return;
+    }
     const local = getTitle(id, allMedia);
     setM(local);
     setAccurateRecs([]); // Clear previous recommendations immediately!
@@ -1669,9 +1700,11 @@ function Details({ list, toggleList, onPlayTrailer, allMedia = initialMedia }) {
     fetchMediaDetailsById(id).then((fullItem) => {
       if (fullItem) {
         setM(fullItem);
-        fetchAccurateRecommendations(fullItem, allMedia).then((recs) => {
-          if (recs && recs.length > 0) setAccurateRecs(recs);
-        });
+        if (!fullItem.blocked) {
+          fetchAccurateRecommendations(fullItem, allMedia).then((recs) => {
+            if (recs && recs.length > 0) setAccurateRecs(recs);
+          });
+        }
       }
     });
   }, [id, allMedia]);
@@ -1695,6 +1728,12 @@ function Details({ list, toggleList, onPlayTrailer, allMedia = initialMedia }) {
   }, [m.id, m.type, allMedia, genreSuggestions]);
 
   const typeLabel = m.type === "movie" ? "More Movies" : "More Series";
+
+  const isBlocked = isBlacklisted(id) || m?.blocked || m?.isBlacklisted;
+  const blacklistEntry = getBlacklistEntry(id) || m;
+  if (isBlocked) {
+    return <ContentUnavailable id={id} entry={blacklistEntry} />;
+  }
 
   return (
     <main className="details">
@@ -1991,13 +2030,19 @@ function SoloWatch({ list, toggleList, onPlayTrailer, allMedia = initialMedia })
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
+    if (isBlacklisted(id)) {
+      setResolvedMedia(getTitle(id, allMedia));
+      return;
+    }
     const local = getTitle(id, allMedia);
     setResolvedMedia(local);
     recordWatchHistory(local, season, episode);
     fetchMediaDetailsById(id).then((fullItem) => {
       if (fullItem) {
         setResolvedMedia(fullItem);
-        recordWatchHistory(fullItem, season, episode);
+        if (!fullItem.blocked) {
+          recordWatchHistory(fullItem, season, episode);
+        }
       }
     });
   }, [id, allMedia, season, episode]);
@@ -2029,6 +2074,12 @@ function SoloWatch({ list, toggleList, onPlayTrailer, allMedia = initialMedia })
 
   const totalSeasons = resolvedMedia?.seasons || (resolvedMedia?.type === "tv" ? 4 : 1);
   const episodesPerSeason = 10;
+
+  const isBlocked = isBlacklisted(id) || resolvedMedia?.blocked || resolvedMedia?.isBlacklisted;
+  const blacklistEntry = getBlacklistEntry(id) || resolvedMedia;
+  if (isBlocked) {
+    return <ContentUnavailable id={id} entry={blacklistEntry} />;
+  }
 
   return (
     <main className="soloWatchPage">
@@ -2685,7 +2736,17 @@ function WatchTogether({ profile = DEFAULT_PROFILE, onPlayTrailer, allMedia = in
       <div className="watchLayout">
         {/* Main Video Stream Player with Floating Reactions Overlay */}
         <div className="watchPlayerWrap">
-          {streamUrl ? (
+          {currentMedia?.blocked || isBlacklisted(currentId) ? (
+            <div style={{ display: "grid", placeItems: "center", height: "100%", padding: 32, textAlign: "center", color: "#f87171" }}>
+              <div>
+                <ShieldAlert size={48} color="#ef4444" style={{ margin: "0 auto 12px" }} />
+                <h3 style={{ color: "#f8fafc", margin: "0 0 8px" }}>Content Unavailable</h3>
+                <p style={{ color: "#94a3b8", fontSize: "13px", maxWidth: 440, margin: "0 auto" }}>
+                  This title has been disabled pursuant to a copyright takedown request. Playback is not permitted.
+                </p>
+              </div>
+            </div>
+          ) : streamUrl ? (
             <iframe
               key={`${streamUrl}-${server}`}
               src={streamUrl}
@@ -3557,6 +3618,35 @@ function Admin({ profile, list, allMedia = initialMedia }) {
   const [keySaved, setKeySaved] = useState(false);
   const [contentSearch, setContentSearch] = useState("");
   const [contentTypeFilter, setContentTypeFilter] = useState("all");
+  const [blacklistItems, setBlacklistItems] = useState(() => getAllBlacklisted());
+  const [newBlockId, setNewBlockId] = useState("");
+  const [newBlockTitle, setNewBlockTitle] = useState("");
+  const [newBlockClaimant, setNewBlockClaimant] = useState("");
+  const [newBlockReason, setNewBlockReason] = useState("");
+  const [blockSavedMsg, setBlockSavedMsg] = useState("");
+
+  const handleAddBlock = (e) => {
+    e.preventDefault();
+    if (!newBlockId.trim() && !newBlockTitle.trim()) return;
+    addBlacklistEntry({
+      id: newBlockId.trim(),
+      title: newBlockTitle.trim(),
+      claimant: newBlockClaimant.trim() || "Copyright Owner / Agent",
+      reason: newBlockReason.trim() || "DMCA Takedown Notice"
+    });
+    setBlacklistItems(getAllBlacklisted());
+    setNewBlockId("");
+    setNewBlockTitle("");
+    setNewBlockClaimant("");
+    setNewBlockReason("");
+    setBlockSavedMsg("Title successfully added to Blacklist!");
+    setTimeout(() => setBlockSavedMsg(""), 3000);
+  };
+
+  const handleRemoveBlock = (id) => {
+    removeBlacklistEntry(id);
+    setBlacklistItems(getAllBlacklisted());
+  };
 
   // Redirect non-admins
   useEffect(() => {
@@ -3572,7 +3662,7 @@ function Admin({ profile, list, allMedia = initialMedia }) {
     { label: "Total Streamable Titles", value: allMedia.length, icon: Film },
     { label: "Movies in Feed", value: totalMovies, icon: Film },
     { label: "TV Series in Feed", value: totalTv, icon: Tv },
-    { label: "User Saved in Watchlist", value: list.length, icon: Heart },
+    { label: "Active DMCA Blocks", value: blacklistItems.length, icon: ShieldAlert },
     { label: "OMDb API Status", value: getOmdbApiKey() ? "Active" : "No Key", icon: Key },
     { label: "TMDB Live Feed", value: getTmdbApiKey() ? "Active (Connected)" : "Not Set", icon: Key }
   ];
@@ -3612,6 +3702,7 @@ function Admin({ profile, list, allMedia = initialMedia }) {
         {[
           { id: "overview", label: "Overview", icon: BarChart2 },
           { id: "content", label: `Catalog (${allMedia.length})`, icon: Film },
+          { id: "dmca", label: `DMCA & Blacklist (${blacklistItems.length})`, icon: ShieldAlert },
           { id: "api", label: "API Configuration", icon: Key },
           { id: "users", label: "User Accounts", icon: Users }
         ].map(({ id, label, icon: Icon }) => (
@@ -3848,6 +3939,139 @@ function Admin({ profile, list, allMedia = initialMedia }) {
           <p style={{ color: "#64748b", marginTop: 16, fontSize: "13px" }}>
             Session data is safely encrypted and synced to localStorage (`cf_profile`, `cf_omdb_key`, `cf_tmdb_key`).
           </p>
+        </div>
+      )}
+
+      {/* DMCA & Blacklist */}
+      {tab === "dmca" && (
+        <div className="adminSection">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+            <div>
+              <h3 style={{ margin: 0 }}>DMCA Takedown & Content Blacklist ({blacklistItems.length})</h3>
+              <p style={{ color: "#94a3b8", fontSize: "13px", margin: "4px 0 0" }}>
+                Titles listed here are completely disabled globally, stripped from streaming embeds, removed from catalog feeds, and tagged with <code style={{ color: "#f87171" }}>noindex</code>.
+              </p>
+            </div>
+            <Link to="/dmca" className="btn" target="_blank" style={{ fontSize: "12px", padding: "6px 14px" }}>
+              <ShieldAlert size={14} /> View Public DMCA Page ↗
+            </Link>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 20 }}>
+            <div style={{ background: "rgba(10,14,26,0.6)", border: "1px solid var(--border-subtle)", borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>Takedown Status</div>
+              <div style={{ fontSize: "18px", fontWeight: 700, color: "#4ade80", marginTop: 4 }}>● Compliant (Active)</div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: 2 }}>Zero unauthorized playback</div>
+            </div>
+            <div style={{ background: "rgba(10,14,26,0.6)", border: "1px solid var(--border-subtle)", borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>Search Crawler Shield</div>
+              <div style={{ fontSize: "18px", fontWeight: 700, color: "#f59e0b", marginTop: 4 }}>Robots.txt Enforced</div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: 2 }}>/watch/ & /title/ disallowed</div>
+            </div>
+            <div style={{ background: "rgba(10,14,26,0.6)", border: "1px solid var(--border-subtle)", borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>Compliance Inbox</div>
+              <div style={{ fontSize: "18px", fontWeight: 700, color: "#38bdf8", marginTop: 4 }}>dmca@cinefilum.app</div>
+              <div style={{ fontSize: "12px", color: "#64748b", marginTop: 2 }}>Direct notice channel</div>
+            </div>
+          </div>
+
+          {/* Add to Blacklist Form */}
+          <div style={{ background: "rgba(15, 23, 42, 0.6)", border: "1px solid var(--border-subtle)", borderRadius: 12, padding: 20, marginBottom: 24 }}>
+            <h4 style={{ margin: "0 0 12px", color: "#f8fafc", display: "flex", alignItems: "center", gap: 8 }}>
+              <ShieldAlert size={16} color="#f59e0b" /> Blacklist a New Title or TMDB ID
+            </h4>
+            <form onSubmit={handleAddBlock} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, alignItems: "flex-end" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "#94a3b8", marginBottom: 4 }}>TMDB ID or Route ID *</label>
+                <input
+                  placeholder="e.g. 1462861 or tmdb-1462861"
+                  value={newBlockId}
+                  onChange={(e) => setNewBlockId(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", fontSize: "13px" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "#94a3b8", marginBottom: 4 }}>Title Name</label>
+                <input
+                  placeholder="e.g. Spider Island"
+                  value={newBlockTitle}
+                  onChange={(e) => setNewBlockTitle(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", fontSize: "13px" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "#94a3b8", marginBottom: 4 }}>Claimant / Rights Holder</label>
+                <input
+                  placeholder="e.g. Studio / Anti-Piracy Agent"
+                  value={newBlockClaimant}
+                  onChange={(e) => setNewBlockClaimant(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", fontSize: "13px" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "#94a3b8", marginBottom: 4 }}>Reason / Legal Ref</label>
+                <input
+                  placeholder="e.g. DMCA Takedown Notice"
+                  value={newBlockReason}
+                  onChange={(e) => setNewBlockReason(e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", fontSize: "13px" }}
+                />
+              </div>
+              <div>
+                <button type="submit" className="btn primary" style={{ width: "100%", padding: "8px 14px", height: "38px" }}>
+                  <ShieldAlert size={14} /> Block Title Globally
+                </button>
+              </div>
+            </form>
+            {blockSavedMsg && (
+              <div style={{ marginTop: 10, color: "#4ade80", fontSize: "12px", fontWeight: 600 }}>
+                ✓ {blockSavedMsg}
+              </div>
+            )}
+          </div>
+
+          {/* Active Blacklist Table */}
+          <div className="adminTable">
+            <div className="adminTableHead" style={{ gridTemplateColumns: "1.5fr 1.5fr 2fr 1fr 1fr" }}>
+              <span>Title / ID</span>
+              <span>Claimant</span>
+              <span>Reason / Notice</span>
+              <span>Date</span>
+              <span>Actions</span>
+            </div>
+            {blacklistItems.map((item) => {
+              const isDefault = item.id === "1462861";
+              return (
+                <div className="adminTableRow" key={item.id} style={{ gridTemplateColumns: "1.5fr 1.5fr 2fr 1fr 1fr" }}>
+                  <span style={{ fontWeight: 600, display: "flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ color: "#f8fafc" }}>{item.title}</span>
+                    <span style={{ fontSize: "11px", color: "#94a3b8", fontFamily: "monospace" }}>ID: {item.id}</span>
+                  </span>
+                  <span style={{ color: "#cbd5e1", fontSize: "12px" }}>{item.claimant || "Rights Holder"}</span>
+                  <span style={{ color: "#94a3b8", fontSize: "12px" }}>
+                    {item.reason}
+                    {item.refId && <div style={{ fontSize: "10px", color: "#f59e0b", fontFamily: "monospace", marginTop: 2 }}>Ref: {item.refId}</div>}
+                  </span>
+                  <span style={{ color: "#64748b", fontSize: "12px" }}>{item.date || "—"}</span>
+                  <div>
+                    {isDefault ? (
+                      <span className="typeBadge" style={{ fontSize: "10px", background: "rgba(239,68,68,0.2)", color: "#f87171" }}>
+                        🔒 Notice Protected
+                      </span>
+                    ) : (
+                      <button
+                        className="btn"
+                        style={{ fontSize: "11px", padding: "3px 8px", color: "#f87171", borderColor: "rgba(239,68,68,0.3)" }}
+                        onClick={() => handleRemoveBlock(item.id)}
+                      >
+                        <Trash2 size={11} /> Unblock
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </main>
@@ -4133,6 +4357,200 @@ function KeyboardShortcutsModal({ isOpen, onClose }) {
   );
 }
 
+// ── Content Unavailable / DMCA Notice ─────────────────────────────
+function ContentUnavailable({ id, entry }) {
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="robots"]');
+    let created = false;
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "robots";
+      document.head.appendChild(meta);
+      created = true;
+    }
+    const prev = meta.content;
+    meta.content = "noindex, nofollow, noarchive";
+    return () => {
+      if (created) meta.remove();
+      else meta.content = prev;
+    };
+  }, []);
+
+  return (
+    <main className="page" style={{ minHeight: "75vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 16px" }}>
+      <div style={{ maxWidth: 640, width: "100%", background: "rgba(15, 23, 42, 0.85)", border: "1px solid rgba(239, 68, 68, 0.4)", borderRadius: 16, padding: "36px 24px", textAlign: "center", backdropFilter: "blur(16px)", boxShadow: "0 24px 48px rgba(0,0,0,0.6)" }}>
+        <div style={{ width: 68, height: 68, margin: "0 auto 18px", borderRadius: "50%", background: "rgba(239, 68, 68, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(239, 68, 68, 0.4)" }}>
+          <ShieldAlert size={36} color="#ef4444" />
+        </div>
+        <span style={{ fontSize: "11px", textTransform: "uppercase", letterSpacing: "1.5px", color: "#f87171", fontWeight: 700, background: "rgba(239,68,68,0.12)", padding: "3px 10px", borderRadius: 999 }}>
+          DMCA · Copyright Compliance
+        </span>
+        <h1 style={{ fontSize: "24px", color: "#f8fafc", margin: "14px 0 10px", fontWeight: 800 }}>
+          Content Unavailable
+        </h1>
+        <p style={{ color: "#94a3b8", fontSize: "14px", lineHeight: "1.6", margin: "0 auto 20px", maxWidth: 520 }}>
+          This title ({entry?.title || id}) is not available on Cinefilum pursuant to a copyright removal notification in accordance with applicable copyright laws (DMCA / EU Copyright Directive).
+        </p>
+        <div style={{ background: "rgba(10, 14, 26, 0.7)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "14px 18px", marginBottom: 24, textAlign: "left", fontSize: "12px", color: "#cbd5e1" }}>
+          <div style={{ marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: "#94a3b8" }}>Status:</span>
+            <span style={{ color: "#ef4444", fontWeight: 700 }}>Access Disabled Globally</span>
+          </div>
+          {entry?.claimant && (
+            <div style={{ marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#94a3b8" }}>Claimant:</span>
+              <span>{entry.claimant}</span>
+            </div>
+          )}
+          {entry?.refId && (
+            <div style={{ marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#94a3b8" }}>Notice Ref:</span>
+              <span style={{ fontFamily: "monospace", color: "#f59e0b" }}>{entry.refId}</span>
+            </div>
+          )}
+          {entry?.date && (
+            <div style={{ marginBottom: 6, display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: "#94a3b8" }}>Action Date:</span>
+              <span>{entry.date}</span>
+            </div>
+          )}
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(255,255,255,0.06)", color: "#94a3b8", fontSize: "11px" }}>
+            Cinefilum does not host video files and adheres to all verified intellectual property takedown notices.
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+          <Link to="/" className="btn primary" style={{ padding: "9px 18px" }}>
+            Return Home
+          </Link>
+          <Link to="/movies" className="btn" style={{ padding: "9px 18px" }}>
+            Explore Library
+          </Link>
+          <Link to="/dmca" className="btn" style={{ padding: "9px 18px" }}>
+            DMCA Policy
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+// ── DMCA & Copyright Compliance Page ──────────────────────────────
+function DmcaPage() {
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+    document.title = "DMCA & Copyright Compliance | Cinefilum";
+  }, []);
+
+  const blacklist = getAllBlacklisted();
+
+  return (
+    <main className="page" style={{ padding: "40px 20px", maxWidth: 960, margin: "0 auto" }}>
+      <div style={{ textAlign: "center", marginBottom: 40 }}>
+        <div style={{ width: 60, height: 60, margin: "0 auto 16px", borderRadius: "50%", background: "rgba(245, 158, 11, 0.15)", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(245, 158, 11, 0.3)" }}>
+          <Shield size={32} color="#f59e0b" />
+        </div>
+        <span className="eyebrow">LEGAL COMPLIANCE</span>
+        <h1 style={{ fontSize: "32px", color: "#f8fafc", margin: "10px 0 12px", fontWeight: 800 }}>
+          DMCA & Copyright Policy
+        </h1>
+        <p style={{ color: "#94a3b8", fontSize: "15px", maxWidth: 640, margin: "0 auto", lineHeight: "1.6" }}>
+          Cinefilum respects the intellectual property rights of creators and copyright owners, adhering strictly to the Digital Millennium Copyright Act (DMCA) and applicable international copyright legislation.
+        </p>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <section style={{ background: "rgba(15, 23, 42, 0.6)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "24px 28px" }}>
+          <h2 style={{ fontSize: "18px", color: "#f8fafc", marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
+            <span>📡</span> Platform Nature & Disclaimer
+          </h2>
+          <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: "1.7", margin: "0 0 12px" }}>
+            Cinefilum is an open-source, client-side metadata browser. The platform utilizes public metadata provided by The Movie Database (TMDB) API to organize and display information about movies and television series.
+          </p>
+          <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: "1.7", margin: 0 }}>
+            <strong style={{ color: "#f59e0b" }}>Cinefilum does not host, upload, store, archive, or transmit any video files, media files, or copyrighted audiovisual streams on any of its servers.</strong> All video playback occurs through embedded players pointing to external third-party content providers. Cinefilum has no control over the content hosted on external third-party servers.
+          </p>
+        </section>
+
+        <section style={{ background: "rgba(15, 23, 42, 0.6)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "24px 28px" }}>
+          <h2 style={{ fontSize: "18px", color: "#f8fafc", marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
+            <span>⚖️</span> Digital Millennium Copyright Act (DMCA) Policy
+          </h2>
+          <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: "1.7", margin: "0 0 12px" }}>
+            Pursuant to Title 17, United States Code, Section 512(c)(3) (and Section 512(d) regarding information location tools), Cinefilum responds expeditiously to notices of alleged copyright infringement.
+          </p>
+          <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: "1.7", margin: 0 }}>
+            Upon receipt of a valid and complete notification meeting statutory requirements, we promptly disable access to the reported title across the entire platform, prevent player playback, remove the title from catalog indexing, and issue <code style={{ color: "#f87171" }}>noindex</code> tags to search engine crawlers.
+          </p>
+        </section>
+
+        <section style={{ background: "rgba(15, 23, 42, 0.6)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "24px 28px" }}>
+          <h2 style={{ fontSize: "18px", color: "#f8fafc", marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
+            <span>📝</span> Notice Requirements for Copyright Owners
+          </h2>
+          <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: "1.7", marginBottom: 14 }}>
+            To submit an effective notification of claimed infringement, please send a written communication containing the following details:
+          </p>
+          <ul style={{ color: "#94a3b8", fontSize: "14px", lineHeight: "1.8", paddingLeft: 20, margin: 0 }}>
+            <li><strong style={{ color: "#f8fafc" }}>Identification of the copyrighted work:</strong> The title of the motion picture or television series, along with reference identifiers (such as an IMDb link, official website, or copyright registration number).</li>
+            <li><strong style={{ color: "#f8fafc" }}>Exact Cinefilum URL(s):</strong> The specific URL(s) on Cinefilum where the content is accessed (e.g., <code style={{ color: "#f59e0b" }}>https://cinefilum.vercel.app/watch/tmdb-...</code> or <code style={{ color: "#f59e0b" }}>https://cinefilum.vercel.app/title/tmdb-...</code>).</li>
+            <li><strong style={{ color: "#f8fafc" }}>Contact details:</strong> Sufficient contact details of the complaining party, including representative name, entity or rights holder name, and business email address.</li>
+            <li><strong style={{ color: "#f8fafc" }}>Good faith statement:</strong> A statement that the complaining party has a good-faith belief that use of the material is not authorized by the copyright owner, its agent, or the law.</li>
+            <li><strong style={{ color: "#f8fafc" }}>Accuracy statement:</strong> A statement that the information in the notification is accurate, and under penalty of perjury, that the complaining party is authorized to act on behalf of the owner of an exclusive right that is allegedly infringed.</li>
+            <li><strong style={{ color: "#f8fafc" }}>Signature:</strong> A physical or electronic signature of the authorized representative.</li>
+          </ul>
+        </section>
+
+        <section style={{ background: "rgba(15, 23, 42, 0.6)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "24px 28px" }}>
+          <h2 style={{ fontSize: "18px", color: "#f8fafc", marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
+            <span>📬</span> Notice Submission Contact
+          </h2>
+          <p style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: "1.7", margin: "0 0 16px" }}>
+            Please submit all DMCA notices and intellectual property inquiries directly to our designated compliance channel:
+          </p>
+          <div style={{ background: "rgba(10, 14, 26, 0.8)", border: "1px solid rgba(245, 158, 11, 0.25)", borderRadius: 10, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>Designated Compliance Email</div>
+              <div style={{ fontSize: "16px", color: "#f59e0b", fontWeight: 700, fontFamily: "monospace", marginTop: 2 }}>dmca@cinefilum.app</div>
+            </div>
+            <div style={{ fontSize: "12px", color: "#4ade80", background: "rgba(74,222,128,0.12)", padding: "4px 12px", borderRadius: 999, fontWeight: 600 }}>
+              ✓ Processed within 24-48 business hours
+            </div>
+          </div>
+        </section>
+
+        <section style={{ background: "rgba(15, 23, 42, 0.6)", border: "1px solid var(--border-subtle)", borderRadius: 14, padding: "24px 28px" }}>
+          <h2 style={{ fontSize: "18px", color: "#f8fafc", marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>
+            <span>🛡️</span> Content Takedown Registry
+          </h2>
+          <p style={{ color: "#94a3b8", fontSize: "13px", lineHeight: "1.6", margin: "0 0 16px" }}>
+            The following titles have been disabled on Cinefilum pursuant to verified copyright notifications:
+          </p>
+          <div className="adminTable">
+            <div className="adminTableHead" style={{ gridTemplateColumns: "2fr 1.5fr 1.5fr 1fr" }}>
+              <span>Title</span>
+              <span>Rights Holder / Claimant</span>
+              <span>Action</span>
+              <span>Date</span>
+            </div>
+            {blacklist.map((item) => (
+              <div className="adminTableRow" key={item.id} style={{ gridTemplateColumns: "2fr 1.5fr 1.5fr 1fr" }}>
+                <span style={{ fontWeight: 600, color: "#f8fafc" }}>{item.title}</span>
+                <span style={{ color: "#94a3b8", fontSize: "12px" }}>{item.claimant || "Rights Holder"}</span>
+                <span>
+                  <span className="typeBadge" style={{ fontSize: "10px", background: "rgba(239,68,68,0.2)", color: "#f87171" }}>
+                    Disabled Globally
+                  </span>
+                </span>
+                <span style={{ color: "#64748b", fontSize: "12px" }}>{item.date || "—"}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
 // ── 404 Not Found Page ─────────────────────────────────────────────
 function NotFound() {
   return (
@@ -4204,6 +4622,7 @@ function Footer({ onOpenShortcuts }) {
           <Link to="/profile">Explorer Profile</Link>
           <Link to="/settings">Player Settings</Link>
           <Link to="/admin">Admin Deck</Link>
+          <Link to="/dmca">DMCA & Copyright</Link>
           <button className="footerShortcutLink" onClick={onOpenShortcuts}>
             ⌨️ Keyboard Shortcuts
           </button>
@@ -4212,7 +4631,7 @@ function Footer({ onOpenShortcuts }) {
 
       <div className="footerBottom">
         <div className="footerCopy">
-          © {new Date().getFullYear()} CINEFILUM. Open-source under MIT License.
+          © {new Date().getFullYear()} CINEFILUM. Open-source under MIT License. · <Link to="/dmca" style={{ color: "#94a3b8", textDecoration: "underline" }}>DMCA / Takedown Policy</Link>
         </div>
         <div className="footerAttribution">
           Powered by TMDB & VidSrc APIs. This product uses the TMDB API but is not endorsed or certified by TMDB.

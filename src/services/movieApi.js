@@ -1,4 +1,5 @@
 import { initialMedia } from "../data/moviesData";
+import { isBlacklisted, getBlacklistEntry } from "../data/blacklist";
 
 // ──────────────────────────────────────────────
 // API Config
@@ -49,9 +50,12 @@ export const STREAM_SERVERS = [
  */
 export function getStreamUrl(media, optionsOrSeason = 1, maybeEpisode = 1, maybeServer = "vidsrc") {
   if (!media) return "";
+  if (media.blocked || isBlacklisted(media.id) || isBlacklisted(media.tmdbId) || isBlacklisted(media.title)) {
+    return "";
+  }
   const tmdbId = media.tmdbId || String(media.id).replace("tmdb-", "").replace("m-", "").replace("tv-", "");
-  if (!tmdbId || isNaN(Number(tmdbId))) {
-    if (media.tmdbId) return "";
+  if (!tmdbId || isNaN(Number(tmdbId)) || isBlacklisted(tmdbId)) {
+    return "";
   }
 
   let season = 1;
@@ -403,6 +407,26 @@ export function getMediaTmdbId(mediaOrId) {
  */
 export async function fetchMediaDetailsById(id) {
   if (!id) return null;
+  if (isBlacklisted(id)) {
+    const entry = getBlacklistEntry(id);
+    return {
+      id: String(id),
+      tmdbId: entry?.tmdbId || String(id).replace("tmdb-", ""),
+      title: entry?.title || "Content Unavailable",
+      blocked: true,
+      reason: entry?.reason || "Removed pursuant to copyright takedown notice",
+      claimant: entry?.claimant || "Copyright Owner / Agent",
+      refId: entry?.refId,
+      date: entry?.date || "2026-09-30",
+      type: "movie",
+      year: entry?.date?.split("-")[0] || "2026",
+      desc: "This title is no longer available on Cinefilum pursuant to an official copyright infringement notice (DMCA 512).",
+      poster: "",
+      backdrop: "",
+      cast: [],
+      trailerId: ""
+    };
+  }
   const inCache = getCachedMedia(id);
   if (inCache && inCache.cast && inCache.cast.length > 0 && inCache.trailerId) return inCache;
 
@@ -571,6 +595,9 @@ export function deduplicateMedia(items) {
 
   for (const m of items) {
     if (!m) continue;
+    if (m.blocked || isBlacklisted(m.id) || isBlacklisted(m.tmdbId) || isBlacklisted(m.title)) {
+      continue;
+    }
     // Filter out items with placeholder clapperboards or missing posters
     if (m.poster && (m.poster.includes("photo-1594909122845") || m.poster.includes("photo-1536440136628"))) {
       continue;
@@ -885,7 +912,7 @@ export function compressAvatarImage(file, maxWidth = 240, maxHeight = 240, quali
  * 3. Falls back to multi-factor weighted scoring (genre correlation, director, rating)
  */
 export async function fetchAccurateRecommendations(media, allMedia = initialMedia, limit = 28) {
-  if (!media) return [];
+  if (!media || media.blocked || isBlacklisted(media.id) || isBlacklisted(media.tmdbId) || isBlacklisted(media.title)) return [];
   const key = getTmdbApiKey();
   const tmdbId = getMediaTmdbId(media);
   const isMovie = media.type === "movie";
@@ -903,6 +930,7 @@ export async function fetchAccurateRecommendations(media, allMedia = initialMedi
     if (!list) return;
     for (const item of list) {
       const itemKey = item.title ? item.title.toLowerCase() : (item.name ? item.name.toLowerCase() : "");
+      if (isBlacklisted(item.id) || isBlacklisted(itemKey)) continue;
       if (
         item.poster_path &&
         !seen.has(String(item.id)) &&
